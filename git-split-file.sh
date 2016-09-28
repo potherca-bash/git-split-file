@@ -1,4 +1,24 @@
 #!/usr/bin/env bash
+#/==============================================================================
+# @TODO: Use named parameters instead of relying on parameter order
+# ------------------------------------------------------------------------------
+# @TODO: Add silent mode (-s / --silent) to suppress all output
+# ------------------------------------------------------------------------------
+# @TODO: Add yes mode (-y / --yes) to run without questions
+# ------------------------------------------------------------------------------
+# @TODO: Add verbose mode (-v / -vv / -vvv / --verbose) instead of (low) debug levels
+# ------------------------------------------------------------------------------
+# @FIXME: Add "aggressive" mode that creates a commit on the source branch (?before/after? merge)
+#         of the source file with all of the lines from the split file removed.
+# - Using grep?
+# - Programatically creating a git patch?
+# - Doing a "reverse" patch? (http://stackoverflow.com/questions/16059771/reverse-apply-a-commit-to-working-copy)
+# - Creating a reverse diff? (http://stackoverflow.com/a/3902431/153049)
+# - Use patch created with GNU diff and use patch --reverse? (http://www.gnu.org/software/diffutils/manual/html_node/Reversed-Patches.html)
+# So many options.
+#
+# grep -Fvxf <remove> <all-lines>
+#/==============================================================================
 
 #/==============================================================================
 #/                               GIT SPLIT FILE
