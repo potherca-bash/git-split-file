@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
+
 #/==============================================================================
 #/                               GIT SPLIT FILE
 #/------------------------------------------------------------------------------
-## Usage: git.split.sh <root-file> <result-path>
+## Usage: git.split.sh <source-file> <source-path> <target-path> <split-strategy>
 ##
-## Where <root-file> is the file in a git repository you would like to be split
-## and result-path is the directory that holds the result of how you would like
-## things to be after the file has been split. Call --help for more details
+## Where:
+##       - <source-file> is the file in a git repository you would like to be split
+##       - <source-path> is the directory that holds the result of how you would like
+##         things to be after the file has been split.
+##       - <target-path> is the directory where the split files should be committed to
+##       - <split-strategy> is the strategy that should be applied to the source-file
+##         Can be one of DELETE | KEEP | MOVE
 ##
-#
+## Call --help for more details
+##
 #/ Usually when you want to split a file into several files under git, you would
 #/ lose the git history of this file. Often this is not desirable. The goal of
 #/ this script is to enable splitting one file under Git revision control into
@@ -16,11 +22,12 @@
 #/
 #/ For this script to work, you need to first create a folder that contains the
 #/ end result you want. This means you need to manually split the content of the
-#/ file you want to keep into seperate files. The more of the order and
+#/ file you want to keep into separate files. The more of the order and
 #/ whitespace you leave intact, the more of the history will also be left intact.
 #
 #/ Once you have everything to your liking, you point this script to the file you
-#/ want to split and the folder that holds the desired end result.
+#/ want to split, the folder that holds the desired end result and the location
+#/ where the result should be placed.
 #/
 #/ This script will then branch of from the branch the designated git repo is on
 #/ for each file to split into. It will then split the given root file, commit
@@ -36,16 +43,10 @@
 #/ 67 : The given root file is not part of a git repository
 #/ 68 : Given split directory path does not exist
 #/ 69 : Given split directory path is not a directory
+#/ 70 : Given split strategy is not supported
 #/
 # Please note that g_iExitCode needs to be set *before* error() is called,
 # otherwise the ExitCode will default to 64.
-# ------------------------------------------------------------------------------
-# Apparently the idea of the 'execute' function is a bit of an anti-pattern.
-# (see http://mywiki.wooledge.org/BashFAQ/050). So either we need to ammend this
-# construction, use 'set -x', copy/past/echo every command, or try if using
-# 'trap [...] DEBUG' is workable OR we should just let go of the idea of the
-# one-on-one replayable log.
-# @FIXME: Replace `execute` calls with a better solution
 #/==============================================================================
 
 
@@ -80,6 +81,7 @@ declare g_bShowHelp=false
 declare -a g_aErrorMessages
 declare -i g_iExitCode=0
 declare -i g_iErrorCount=0
+readonly g_sBranchPrefix='split-file'
 # ==============================================================================
 
 
@@ -90,7 +92,7 @@ function importDependencies() {
 
     source "${HOME}/.common.sh"
 
-    sourceFunction debug error execute message outputErrorMessages printRuler usage
+    sourceFunction debug error indent message outputErrorMessages printRuler printStatus printTopic usage
 }
 # ==============================================================================
 
@@ -101,13 +103,14 @@ function importDependencies() {
 # The following variables will be set:
 #
 # - g_bInsideGitRepo
-# - g_bShowHelp
 # - g_sRootBranch
-# - g_sRootDirectory
-# - g_sRootFileName
-# - g_sRootFilePath
-# - g_sSplitBranch
+# - g_bShowHelp
+# - g_sSourceBranch
+# - g_sSourceFileName
+# - g_sSourceFilePath
 # - g_sSplitDirectory
+# - g_sStrategy
+# - g_sTargetDirectory
 #
 # ------------------------------------------------------------------------------
 function handleParams {
@@ -118,38 +121,43 @@ function handleParams {
         fi
     done
 
-    if [ "${g_bShowHelp}" = false ] && [  "$#" -ne 2 ];then
+    if [ "${g_bShowHelp}" = false ] && [  "$#" -ne 4 ];then
         g_iExitCode=65
-        error 'This script expects two command-line arguments'
+        error 'This script expects four command-line arguments'
     elif [ "${g_bShowHelp}" = false ];then
-        readonly g_sRootFilePath=$(readlink "${1}")
-        readonly g_sRootFileName=$(basename "${g_sRootFilePath}")
-        readonly g_sSplitDirectory=$(readlink "${2}")
+        readonly g_sTargetDirectory="${3}"
+        readonly  g_sStrategy="${4}"
 
-        if [ ! -f $(readlink "${g_sRootFilePath}") ];then
+        if [ ! -f $(readlink -f "${1}") ];then
             g_iExitCode=66
-            error "The given root file '${g_sRootFilePath}' does not exist"
+            error "The given root file '${1}' does not exist"
         else
-            readonly g_sRootDirectory=$(dirname "${g_sRootFilePath}")
+            readonly g_sSourceFilePath=$(readlink -f "${1}")
+            readonly g_sSourceFileName=$(basename "${g_sSourceFilePath}")
 
-            cd "${g_sRootDirectory}" # @FIXME: <--- Using `cd` is a side-effect!
-
-            if [ $(git status $(readlink "${1}") > /dev/null 2>&1 || echo '1') ];then
+            if [ "$(git status ${g_sSourceFilePath} > /dev/null 2>&1 || echo '1')" ];then
                 g_iExitCode=67
-                error "The given split file '${1}' is not part of a git repository"
+                error "The given split file '${g_sSourceFilePath}' is not part of a git repository"
             else
                 g_bInsideGitRepo=true
                 readonly g_sRootBranch=$(getCurrentBranch)
-                readonly g_sSplitBranch="split-file-${g_sRootFileName}"
+                readonly g_sSourceBranch="${g_sBranchPrefix}_${g_sSourceFileName}"
             fi
         fi
 
-        if [ ! -e $(readlink "${g_sSplitDirectory}") ];then
+        if [ ! -e $(readlink -f "${2}") ];then
             g_iExitCode=68
-            error "The given split directory '${g_sSplitDirectory}' does not exist"
-        elif [ ! -d $(readlink "${g_sSplitDirectory}") ];then
+            error "The given split directory '${2}' does not exist"
+        elif [ ! -d $(readlink -f "${2}") ];then
             g_iExitCode=69
-            error "The given split directory '${g_sSplitDirectory}' is not a directory"
+            error "The given split directory '${2}' is not a directory"
+        else
+            readonly g_sSplitDirectory=$(readlink -f "${2}")
+        fi
+
+        if [ "${g_sStrategy}" != 'DELETE' ] && [ "${g_sStrategy}" != 'KEEP' ] && [ "${g_sStrategy}" != 'MOVE' ]; then
+            g_iExitCode=71
+            error "The given split strategy '${g_sStrategy}' is not one of supported DELETE | KEEP | MOVE"
         fi
     fi
     return ${g_iExitCode}
@@ -170,159 +178,212 @@ function getCurrentBranch() {
 }
 
 function commit() {
-    echo "git commit -m \"${1}\""
-    git commit -m "${1}"
+    printStatus 'Creating commit'
+    git commit -m "${1}." | indent
 }
 
-function createSubBranch() {
-    execute "git checkout -b ${g_sSplitBranch}_${1}"
+function createBranch() {
+    local sBranchName sStartBranch
+
+    sBranchName="${1}"
+    sStartBranch="${2}"
+
+    #git checkout -b "${sBranchName}" "${sStartBranch}" | indent
+    git branch "${sBranchName}" "${sStartBranch}" | indent
 }
 
-function checkoutBranch() {
-    printRuler 3
-    message "Switching back to ${2} branch"
-    printRuler 3
-    execute "git checkout ${1}"
-    message "Current branch : $(getCurrentBranch)"
-}
-
-function checkoutRootBranch() {
-    checkoutBranch "${g_sRootBranch}" 'original'
-}
-
-function checkoutSplitBranch() {
-    checkoutBranch "${g_sSplitBranch}" 'split'
+function createSourceBranch() {
+    printTopic 'Creating separate branch to merge split files back into'
+    createBranch "${g_sSourceBranch}" "${g_sRootBranch}"
 }
 
 function createSplitBranch() {
-    printRuler 2
-    message 'Creating separate branche to merge split files back into'
-    printRuler 3
-    execute "git checkout -b ${g_sSplitBranch}"
-    printRuler 2
-    echo ''
+    printStatus "Creating separate branch to split file '${1}'"
+    createBranch "${g_sSourceBranch}_${1}" "${g_sSourceBranch}"
+}
+
+function checkoutBranch() {
+    printStatus "Switching back to ${2} branch"
+    git checkout "${1}" | indent
+}
+
+function checkoutSplitBranch() {
+    local sBranchName sFile
+
+    sFile="${1}"
+    sBranchName="${g_sSourceBranch}_${sFile}"
+
+    checkoutBranch "${sBranchName}" 'split'
+}
+
+function checkoutRootBranch() {
+    checkoutBranch "${g_sRootBranch}" 'root'
+}
+
+function checkoutSourceBranch() {
+    checkoutBranch "${g_sSourceBranch}" 'source'
 }
 
 function mergeSplitBranch() {
-    local sSplitFile="${1}"
+    local sBranchName sFile
     local -i iResult=0
-    printRuler 3
-    message "Current branch : $(getCurrentBranch)"
-    message "  Current file : ${sSplitFile}"
-    git merge -X theirs ${g_sSplitBranch}_${sSplitFile} || iResult="$?"
+    sFile="${1}"
 
-    if [ "${iResult}" -eq 0 ]; then
-        message 'No merge conflict'
+    sBranchName="${g_sSourceBranch}_${sFile}"
+
+    printTopic "Merging branch '${sBranchName}' back into '$(getCurrentBranch)'"
+
+    if [ -n "$(git show-ref refs/heads/${sBranchName})" ]; then
+        printStatus "Branch '${sBranchName}' exists"
+        git merge --no-ff --no-edit -X theirs ${sBranchName} | indent || iResult="$?"
+
+        if [ "${iResult}" -eq 0 ]; then
+            printStatus 'No merge conflict'
+        else
+            printStatus 'Merge conflict occurred. Attempting to resolve.'
+            git add -- "${g_sSourceFilePath}" | indent
+
+            commit "Merging split file '${g_sSourceFileName}'"
+        fi
     else
-        message 'Merge conflict occurred. Attempting to resolve.'
-        execute "git add -- ${g_sRootFileName}"
-
-        # @TODO: Figure out when we can just use `commit -F '.git/COMMIT_EDITMSG'`
-        commit "Merging split file '${g_sRootFileName}'"
+        printStatus "Branch does not exist. No need to merge"
     fi
 }
 
 function renameFile() {
-    local sNewFile="${1}"
+    local sFile="${1}"
 
-    if [ "${g_sRootFileName}" = "${sNewFile}" ];then
-        message "File is root file '${g_sRootFileName}', no need to rename"
+    if [[ ! -f "${g_sSourceFilePath}" ]];then
+        printStatus "File '${g_sSourceFilePath}' does not exist. Checking out from '${g_sRootBranch}'"
+        git checkout "${g_sRootBranch}" -- "${g_sSourceFilePath}"
+    fi
+
+    if [[ ! -d "${g_sTargetDirectory}" ]];then
+        printStatus "Target directory '${g_sTargetDirectory}' does not exist"
+        printStatus "Creating target directory '${g_sTargetDirectory}'"
+        mkdir -p "${g_sTargetDirectory}"
+    fi
+
+    if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
+        printStatus "File is root file '${g_sSourceFileName}', no need to rename"
     else
-        execute "git mv ${g_sRootFileName} ${sNewFile}"
-        commit "Creates separate file for '${sNewFile}'"
+        printStatus "Creating separate file for '${sFile}'"
+        git mv "${g_sSourceFilePath}" "${g_sTargetDirectory}/${sFile}" | indent
+        commit "Adds separate file for '${sFile}'"
     fi
 }
 
-function moveFileContent() {
-    local sFile="${1}"
-    local sMessage
+function commitFileContent() {
+    local sFile sMessage sTargetFile
 
-    echo "cat ${g_sSplitDirectory}/${sFile} > ${g_sRootDirectory}/${sFile}"
-    cat "${g_sSplitDirectory}/${sFile}" > "${g_sRootDirectory}/${sFile}"
+    sFile="${1}"
 
-    execute "git add ${sFile}"
-
-    if [ "${g_sRootFileName}" = "${sFile}" ];then
-        sMessage="Removes all content from '${sFile}' that has been moved to separate file(s)"
+    if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
+        printStatus "Writing content to source file '${g_sSourceFileName}'"
+        sMessage="Removes content that has been split of from '${sFile}'"
+        sTargetFile="${g_sSourceFilePath}"
     else
-        sMessage="Places content for '${sFile}' in separate file"
+        printStatus "Writing content to target file '${g_sTargetDirectory}/${sFile}'"
+        sMessage="Changes content in separated file '${sFile}'"
+        sTargetFile="${g_sTargetDirectory}/${sFile}"
     fi
 
+    cat "${g_sSplitDirectory}/${sFile}" > "${sTargetFile}"
+    git add "${sTargetFile}" | indent
     commit "${sMessage}"
 }
 
-function runSplit() {
+function createSubBranches() {
+    local sFile
 
-    createSplitBranch
-
-    for sSplitFile in $(ls "${g_sSplitDirectory}");do
-        printRuler 2
-        message "Splitting for ${sSplitFile}"
-        printRuler 3
-
-        createSubBranch "${sSplitFile}"
-        renameFile "${sSplitFile}"
-        moveFileContent "${sSplitFile}"
-        checkoutSplitBranch
-
-        printRuler 2
-        echo ''
+    printTopic 'Creating sub-branches'
+    for sFile in $(ls "${g_sSplitDirectory}");do
+        #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
+        #    printStatus "Skipping branch for source file '${g_sSourceFileName}'"
+        #else
+            createSplitBranch "${sFile}"
+        #fi
     done
 }
 
-function runMerges() {
+function splitFiles() {
+    local sFile
 
-    printRuler 2
-    message 'Merging all the file-split branches into the main split branch'
+    for sFile in $(ls "${g_sSplitDirectory}");do
+        #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
+        #    printStatus "Skipping source file '${g_sSourceFileName}'"
+        #else
+            printTopic "Running split processing for file '${sFile}'"
+            checkoutSplitBranch "${sFile}"
+            renameFile "${sFile}"
+            commitFileContent "${sFile}"
+        #fi
+    done
+}
 
-    # @NOTE: If a branch for g_sRootFileName is present we need to merge that last
-    for sSplitFile in $(ls "${g_sSplitDirectory}");do
-        if [ "${sSplitFile}" != "${g_sRootFileName}" ];then
-            mergeSplitBranch "${sSplitFile}"
+function mergeSplitBranches() {
+    local sFile
+    printTopic 'Merging all the split branches into the source branch'
+    checkoutSourceBranch
+
+    for sFile in $(ls "${g_sSplitDirectory}");do
+        if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
+            printTopic "Skipping source file '${g_sSourceFileName}'"
+        else
+            printTopic "Running merge processing for file '${sFile}'"
+            mergeSplitBranch "${sFile}"
         fi
     done
 
-    mergeSplitBranch "${g_sRootFileName}"
-
-    checkoutRootBranch
-    printRuler 2
-    echo ''
-
-    printRuler 2
-    message 'Merging split branch into the root branch'
-    printRuler 3
-    execute "git merge ${g_sSplitBranch}"
-    printRuler 2
-    echo ''
+    printTopic 'All file-split branches have been merged into the main split branch'
 }
 
 function runCleanup() {
-    printRuler 2
-    message 'Remove all the split branches that were created'
-    printRuler 3
+    local sBranchName sFile
 
-    execute "git branch -D ${g_sSplitBranch}"
+    read -n1 -p 'Remove all created branches? (y/n) ' sContinue
+    echo ""
 
-    for sSplitFile in $(ls "${g_sSplitDirectory}");do
-        execute "git branch -D ${g_sSplitBranch}_${sSplitFile}"
-    done
+    if [[ "${sContinue}" = 'y' ]];then
+        printStatus 'Removing all the split branches that were created'
+
+        git branch -D "${g_sSourceBranch}" | indent
+
+        for sFile in $(ls "${g_sSplitDirectory}");do
+            sBranchName="${g_sSourceBranch}_${sFile}"
+            if [ -n "$(git show-ref refs/heads/${sBranchName})" ]; then
+                # Branch exists
+                git branch -D "${sBranchName}" | indent
+            fi
+        done
+        sBranchName="${g_sSourceBranch}_${g_sSourceFileName}"
+        if [ -n "$(git show-ref refs/heads/${sBranchName})" ]; then
+            # Branch exists
+            git branch -D "${sBranchName}" | indent
+        fi
+
+    else
+        printStatus 'Leaving all branches in place.'
+    fi
+
     printRuler 2
 }
 
 function outputHeader() {
-    printRuler 2
-    message "        running $0"
-    message "       for file ${g_sRootFilePath}"
-    message " with directory ${g_sSplitDirectory}"
-    printRuler 3
-    debugMessage "g_sRootBranch     = ${g_sRootBranch}"
-    debugMessage "g_sSplitBranch    = ${g_sSplitBranch}"
-    debugMessage "g_sRootFileName   = ${g_sRootFileName}"
-    debugMessage "g_sRootDirectory  = ${g_sRootDirectory}"
-    debugMessage "g_sRootFilePath   = ${g_sRootFilePath}"
-    debugMessage "g_sSplitDirectory = ${g_sSplitDirectory}"
-    printRuler 2
-    echo ''
+
+    message "               running $0"
+    message "       for source file ${g_sSourceFilePath}"
+    message " with source directory ${g_sSplitDirectory}"
+    message "   to target directory ${g_sTargetDirectory}"
+    message "  using split strategy ${g_sStrategy}"
+
+    debugMessage "g_sRootBranch      = ${g_sRootBranch}"
+    debugMessage "g_sSourceBranch     = ${g_sSourceBranch}"
+    debugMessage "g_sSourceFilePath  = ${g_sSourceFilePath}"
+    debugMessage "g_sSourceFileName  = ${g_sSourceFileName}"
+    debugMessage "g_sSplitDirectory  = ${g_sSplitDirectory}"
+    debugMessage "g_sTargetDirectory = ${g_sTargetDirectory}"
+    debugMessage "g_sStrategy        = ${g_sStrategy}"
 }
 
 function run() {
@@ -330,11 +391,36 @@ function run() {
     outputHeader
 
     if [ "${DEBUG_LEVEL}" -gt 0 ];then
-        message "Debugging on - Debug Level : ${DEBUG_LEVEL}"
+        printStatus "Debugging on - Debug Level : ${DEBUG_LEVEL}"
     fi
-    runSplit
-    runMerges
-    runCleanup
+
+    read -n1 -p 'Does this look correct? (y/n) ' sContinue
+    echo ""
+
+    if [[ "${sContinue}" = 'y' ]];then
+        createSourceBranch
+
+        # Process all non-source files
+        createSubBranches
+        splitFiles
+
+        # ---
+        # @TODO: Utilize the strategy flag.
+        # ---
+        #printTopic "Running split process for source file '${g_sSourceFileName}'"
+        #checkoutSourceBranch
+        #commitFileContent "${g_sSourceFileName}"
+
+        mergeSplitBranches
+        # @NOTE: If a branch for g_sSourceFileName is present we need to merge that last
+        mergeSplitBranch "${g_sSourceFileName}"
+
+        printTopic "Merging source branch '${g_sSourceBranch}' into the root branch '${g_sRootBranch}'"
+        checkoutRootBranch
+        git merge --no-ff --no-edit "${g_sSourceBranch}" | indent
+    else
+        message 'Aborting.'
+    fi
 }
 
 function finish() {
@@ -348,6 +434,7 @@ function finish() {
 
     debugMessage "Working Directory : $(pwd)"
     if [ ${g_bInsideGitRepo} = true ];then
+        debugMessage "Root branch    : $g_sRootBranch"
         debugMessage "Current branch : $(getCurrentBranch)"
     else
         debugMessage "Not in a git repo"
@@ -357,11 +444,18 @@ function finish() {
         checkoutRootBranch
     fi
 
+    runCleanup
+
+    message 'Done.'
+
     exit ${g_iExitCode}
 }
 
 function registerTraps() {
+
     trap finish EXIT
+    trap finish ERR
+
     if [ "${DEBUG_LEVEL}" -gt 1 ] && [ "${DEBUG_LEVEL}" -lt 5 ];then
         # Trap function is defined inline so we get the correct line number
         #trap '(echo -e "#[DEBUG] [$(basename ${BASH_SOURCE[0]}):${LINENO[0]}] ${BASH_COMMAND}");' DEBUG
@@ -376,7 +470,7 @@ function registerTraps() {
 # ------------------------------------------------------------------------------
 importDependencies
 registerTraps
-handleParams VALUE=${@:-}
+handleParams ${@:-}
 
 if [ ${g_iExitCode} -eq 0 ];then
 
@@ -384,12 +478,6 @@ if [ ${g_iExitCode} -eq 0 ];then
         fullUsage
     else
         run
-    fi
-
-    if [ ${#g_aErrorMessages[*]} -ne 0 ];then
-        outputErrorMessages "${g_aErrorMessages[*]}"
-    else
-        message 'Done.'
     fi
 fi
 # ==============================================================================
