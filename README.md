@@ -2,7 +2,7 @@
 permalink: /
 ---
 
-# Git Split File
+# [Git Split File](https://github.com/Potherca/git-split-file)
 
 Split a file in a git repository without losing the git history.
 
@@ -118,4 +118,4 @@ logo / images / ?
 
 ## License
 
-This project has been licensed under GPL-3.0+ License.
+This project has been licensed under [GPL-3.0+ License](LICENSE).
