@@ -106,14 +106,144 @@ readonly g_sBranchPrefix='split-file'
 
 
 # ==============================================================================
-#                           IMPORT EXTERNAL FUNCTIONS
+#                           UTILITY FUNCTIONS
+# ==============================================================================
+# ==============================================================================
+# Store given message in the ErrorMessage array
 # ------------------------------------------------------------------------------
-function importDependencies() {
+error() {
+    if [ ! -z ${2:-} ];then
+        g_iExitCode=${2}
+    elif [ ${g_iExitCode} -eq 0 ];then
+        g_iExitCode=64
+    fi
 
-    source "${HOME}/.common.sh"
+    g_iErrorCount=$((${g_iErrorCount}+1))
 
-    sourceFunction debug error indent message outputErrorMessages printRuler printStatus printTopic usage
+    g_aErrorMessages[${g_iErrorCount}]="${1}\n"
+
+    return ${g_iExitCode};
 }
+# ==============================================================================
+
+# ==============================================================================
+isMacOS() {
+# ------------------------------------------------------------------------------
+    [[ "$(uname -s)" == "Darwin" ]] && return 0 || return 1;
+}
+# ==============================================================================
+
+# ==============================================================================
+# sed -l basically makes sed replace and buffer through stdin to stdout
+# so you get updates while the command runs and dont wait for the end
+# e.g. npm install | indent
+# ------------------------------------------------------------------------------
+indent() {
+  # if an arg is given it's a flag indicating we shouldn't indent the first line,
+  # so use :+ to tell SED accordingly if that parameter is set, otherwise null
+  # string for no range selector prefix (it selects from line 2 onwards and then
+  # every 1st line, meaning all lines)
+
+    # @CHECKME: Shouldn't the line below be used?
+    # c="${1:+"2,999"} s/^/       /"
+    c='s/^/       /g'
+    if [ isMacOS == 0 ];then
+        # mac/bsd sed: -l buffers on line boundaries
+        sed -l "$c"
+    else
+        # unix/gnu sed: -u unbuffered (arbitrary) chunks of data
+        sed -u "$c"
+    fi
+}
+# ==============================================================================
+
+# ==============================================================================
+message() {
+# ------------------------------------------------------------------------------
+    echo -e "# ${@}" >&1
+}
+# ==============================================================================
+
+# ==============================================================================
+# Output all given Messages to STDERR
+# ------------------------------------------------------------------------------
+outputErrorMessages() {
+    echo -e "\nErrors occurred:\n\n ${@}" >&2
+}
+# ==============================================================================
+
+# ==============================================================================
+printRuler() {
+# ------------------------------------------------------------------------------
+    local sRuler
+    local sCharacter
+
+    case $1 in
+        1)
+            sCharacter='##'
+        ;;
+        2)
+            sCharacter='=='
+        ;;
+        3)
+            sCharacter='--'
+        ;;
+        4)
+            sCharacter='- '
+        ;;
+        5)
+            sCharacter='..'
+        ;;
+        6)
+            sCharacter='. '
+        ;;
+        *)
+            sCharacter=''
+        ;;
+    esac
+
+    sRuler=$(printf -- "${sCharacter}%.0s" {1..40})
+
+    message "${sRuler}"
+}
+# ==============================================================================
+
+# ==============================================================================
+# ------------------------------------------------------------------------------
+printStatus() {
+    echo "-----> $*"
+}
+# ==============================================================================
+
+# ==============================================================================
+# ------------------------------------------------------------------------------
+printTopic() {
+    echo
+    echo "=====> $*"
+}
+# ==============================================================================
+
+# ==============================================================================
+## Usage:
+## Displays all lines in main script that start with '##'
+# ------------------------------------------------------------------------------
+shortUsage() {
+    [ "$*" ] && echo "$(basename $0): $*"
+    sed -n '/^##/,/^$/s/^## \{0,1\}//p' "$0"
+} #2>/dev/null
+# ==============================================================================
+
+
+# ==============================================================================
+#/ Usage:
+#/ Displays all lines in main script that start with '#/'
+# ------------------------------------------------------------------------------
+fullUsage() {
+    grep '^#/' <"$0" | cut -c4-
+}
+# ==============================================================================
+
+
 # ==============================================================================
 
 
@@ -133,7 +263,7 @@ function importDependencies() {
 # - g_sTargetDirectory
 #
 # ------------------------------------------------------------------------------
-function handleParams {
+handleParams {
 
     for sParam in ${*};do
         if [ "${sParam}" = "--help" ];then
@@ -187,22 +317,22 @@ function handleParams {
 # ##############################################################################
 #                              UTILITY FUNCTIONS
 # ##############################################################################
-function debugMessage() {
+debugMessage() {
     if [ "${DEBUG_LEVEL}" -gt 0 ] && [ "${DEBUG_LEVEL}" -lt 5 ];then
         debug "${1}"
     fi
 }
 
-function getCurrentBranch() {
+getCurrentBranch() {
     echo $(git rev-parse --abbrev-ref HEAD)
 }
 
-function commit() {
+commit() {
     printStatus 'Creating commit'
     git commit -m "${1}." | indent
 }
 
-function createBranch() {
+createBranch() {
     local sBranchName sStartBranch
 
     sBranchName="${1}"
@@ -212,22 +342,22 @@ function createBranch() {
     git branch "${sBranchName}" "${sStartBranch}" | indent
 }
 
-function createSourceBranch() {
+createSourceBranch() {
     printTopic 'Creating separate branch to merge split files back into'
     createBranch "${g_sSourceBranch}" "${g_sRootBranch}"
 }
 
-function createSplitBranch() {
+createSplitBranch() {
     printStatus "Creating separate branch to split file '${1}'"
     createBranch "${g_sSourceBranch}_${1}" "${g_sSourceBranch}"
 }
 
-function checkoutBranch() {
+checkoutBranch() {
     printStatus "Switching back to ${2} branch"
     git checkout "${1}" | indent
 }
 
-function checkoutSplitBranch() {
+checkoutSplitBranch() {
     local sBranchName sFile
 
     sFile="${1}"
@@ -236,15 +366,15 @@ function checkoutSplitBranch() {
     checkoutBranch "${sBranchName}" 'split'
 }
 
-function checkoutRootBranch() {
+checkoutRootBranch() {
     checkoutBranch "${g_sRootBranch}" 'root'
 }
 
-function checkoutSourceBranch() {
+checkoutSourceBranch() {
     checkoutBranch "${g_sSourceBranch}" 'source'
 }
 
-function mergeSplitBranch() {
+mergeSplitBranch() {
     local sBranchName sFile
     local -i iResult=0
     sFile="${1}"
@@ -270,7 +400,7 @@ function mergeSplitBranch() {
     fi
 }
 
-function renameFile() {
+renameFile() {
     local sFile="${1}"
 
     if [[ ! -f "${g_sSourceFilePath}" ]];then
@@ -293,7 +423,7 @@ function renameFile() {
     fi
 }
 
-function commitFileContent() {
+commitFileContent() {
     local sFile sMessage sTargetFile
 
     sFile="${1}"
@@ -313,7 +443,7 @@ function commitFileContent() {
     commit "${sMessage}"
 }
 
-function createSubBranches() {
+createSubBranches() {
     local sFile
 
     printTopic 'Creating sub-branches'
@@ -326,7 +456,7 @@ function createSubBranches() {
     done
 }
 
-function splitFiles() {
+splitFiles() {
     local sFile
 
     for sFile in $(ls "${g_sSplitDirectory}");do
@@ -341,7 +471,7 @@ function splitFiles() {
     done
 }
 
-function mergeSplitBranches() {
+mergeSplitBranches() {
     local sFile
     printTopic 'Merging all the split branches into the source branch'
     checkoutSourceBranch
@@ -358,7 +488,7 @@ function mergeSplitBranches() {
     printTopic 'All file-split branches have been merged into the main split branch'
 }
 
-function runCleanup() {
+runCleanup() {
     local sBranchName sFile
 
     read -n1 -p 'Remove all created branches? (y/n) ' sContinue
@@ -389,7 +519,7 @@ function runCleanup() {
     printRuler 2
 }
 
-function outputHeader() {
+outputHeader() {
 
     message "               running $0"
     message "       for source file ${g_sSourceFilePath}"
@@ -406,7 +536,7 @@ function outputHeader() {
     debugMessage "g_sStrategy        = ${g_sStrategy}"
 }
 
-function run() {
+run() {
 
     outputHeader
 
@@ -443,12 +573,12 @@ function run() {
     fi
 }
 
-function finish() {
+finish() {
     if [ ! ${g_iExitCode} -eq 0 ];then
-        outputErrorMessages ${g_aErrorMessages[*]}
+        outputErrorMessages "${g_aErrorMessages[*]}"
 
         if [ ${g_iExitCode} -eq 65 ];then
-            usage
+            shortUsage
         fi
     fi
 
@@ -471,7 +601,7 @@ function finish() {
     exit ${g_iExitCode}
 }
 
-function registerTraps() {
+registerTraps() {
 
     trap finish EXIT
     trap finish ERR
