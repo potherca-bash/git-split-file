@@ -360,13 +360,21 @@ createSourceBranch() {
     createBranch "${g_sSourceBranch}" "${g_sRootBranch}"
 }
 
+createBranchName() {
+    local sFile
+
+    sFile="$(basename $1)"
+
+    echo "${g_sSourceBranch}_${sFile}"
+}
+
 createSplitBranch() {
     printStatus "Creating separate branch to split file '${1}'"
-    createBranch "${g_sSourceBranch}_${1}" "${g_sSourceBranch}"
+    createBranch "$(createBranchName ${1})" "${g_sSourceBranch}"
 }
 
 checkoutBranch() {
-    printStatus "Switching back to ${2} branch"
+    printStatus "Switching to ${2} branch"
     git checkout "${1}" | indent
 }
 
@@ -374,7 +382,8 @@ checkoutSplitBranch() {
     local sBranchName sFile
 
     sFile="${1}"
-    sBranchName="${g_sSourceBranch}_${sFile}"
+
+    sBranchName="$(createBranchName ${sFile})"
 
     checkoutBranch "${sBranchName}" 'split'
 }
@@ -392,7 +401,7 @@ mergeSplitBranch() {
     local -i iResult=0
     sFile="${1}"
 
-    sBranchName="${g_sSourceBranch}_${sFile}"
+    sBranchName="$(createBranchName ${sFile})"
 
     printTopic "Merging branch '${sBranchName}' back into '$(getCurrentBranch)'"
 
@@ -524,7 +533,7 @@ runCleanup() {
             git branch -D "${g_sSourceBranch}" | indent
 
             for sFile in ${g_sSplitDirectory}/*;do
-                sBranchName="${g_sSourceBranch}_${sFile}"
+                sBranchName="$(createBranchName ${sFile})"
 
                 # shellcheck disable=SC2086
                 if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
@@ -532,7 +541,7 @@ runCleanup() {
                     git branch -D "${sBranchName}" | indent
                 fi
             done
-            sBranchName="${g_sSourceBranch}_${g_sSourceFileName}"
+            sBranchName="$(createBranchName ${g_sSourceFileName})"
 
             # shellcheck disable=SC2086
             if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
