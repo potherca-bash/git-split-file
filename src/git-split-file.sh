@@ -258,7 +258,7 @@ fullUsage() {
 # ------------------------------------------------------------------------------
 handleParams() {
 
-    local iDebugLevel sParam sRootFile sSplitDirectory sTargetDirectory
+    local iDebugLevel sParam sRootFile sSplitDirectory
 
     iDebugLevel=0
 
@@ -363,14 +363,14 @@ createSourceBranch() {
 createBranchName() {
     local sFile
 
-    sFile="$(basename $1)"
+    sFile=$(basename "${1}")
 
     echo "${g_sSourceBranch}_${sFile}"
 }
 
 createSplitBranch() {
     printStatus "Creating separate branch to split file '${1}'"
-    createBranch "$(createBranchName ${1})" "${g_sSourceBranch}"
+    createBranch "$(createBranchName "${1}")" "${g_sSourceBranch}"
 }
 
 checkoutBranch() {
@@ -383,7 +383,7 @@ checkoutSplitBranch() {
 
     sFile="${1}"
 
-    sBranchName="$(createBranchName ${sFile})"
+    sBranchName=$(createBranchName "${sFile}")
 
     checkoutBranch "${sBranchName}" 'split'
 }
@@ -401,7 +401,7 @@ mergeSplitBranch() {
     local -i iResult=0
     sFile="${1}"
 
-    sBranchName="$(createBranchName ${sFile})"
+    sBranchName=$(createBranchName "${sFile}")
 
     printTopic "Merging branch '${sBranchName}' back into '$(getCurrentBranch)'"
 
@@ -485,7 +485,7 @@ splitFiles() {
     local sFile sFileName
 
     for sFile in ${g_sSplitDirectory}/*;do
-        sFileName="$(basename ${sFile})"
+        sFileName=$(basename "${sFile}")
         #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
         #    printStatus "Skipping source file '${g_sSourceFileName}'"
         #else
@@ -533,7 +533,7 @@ runCleanup() {
             git branch -D "${g_sSourceBranch}" | indent
 
             for sFile in ${g_sSplitDirectory}/*;do
-                sBranchName="$(createBranchName ${sFile})"
+                sBranchName=$(createBranchName "${sFile}")
 
                 # shellcheck disable=SC2086
                 if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
@@ -541,7 +541,7 @@ runCleanup() {
                     git branch -D "${sBranchName}" | indent
                 fi
             done
-            sBranchName="$(createBranchName ${g_sSourceFileName})"
+            sBranchName=$(createBranchName "${g_sSourceFileName}")
 
             # shellcheck disable=SC2086
             if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
