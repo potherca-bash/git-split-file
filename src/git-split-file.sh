@@ -280,11 +280,11 @@ handleParams() {
         g_iExitCode=65
         error 'This script expects four command-line arguments'
     elif [[ "${g_bShowHelp}" = false ]];then
-        readonly g_sTargetDirectory="${3}"
-        readonly  g_sStrategy="${4}"
 
         sRootFile=$(readlink -f "${1}")
         sSplitDirectory=$(readlink -f "${2}")
+        readonly g_sTargetDirectory=$(readlink -f "${3}")
+        readonly  g_sStrategy="${4}"
 
         if [[ ! -f "${sRootFile}" ]];then
             g_iExitCode=66
@@ -415,11 +415,13 @@ mergeSplitBranch() {
 }
 
 renameFile() {
-    local sFile="${1}"
+    local sFile
+
+    sFile="${1}"
 
     if [[ ! -f "${g_sSourceFilePath}" ]];then
         printStatus "File '${g_sSourceFilePath}' does not exist. Checking out from '${g_sRootBranch}'"
-        git checkout "${g_sRootBranch}" -- "${g_sSourceFilePath}"
+        git checkout "${g_sRootBranch}" -- "${g_sSourceFilePath}" | indent
     fi
 
     if [[ ! -d "${g_sTargetDirectory}" ]];then
@@ -471,9 +473,10 @@ createSubBranches() {
 }
 
 splitFiles() {
-    local sFile
+    local sFile sFileName
 
     for sFile in ${g_sSplitDirectory}/*;do
+        sFileName="$(basename ${sFile})"
         #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
         #    printStatus "Skipping source file '${g_sSourceFileName}'"
         #else
@@ -483,8 +486,8 @@ splitFiles() {
             printDebug "sFileName = ${sFileName}"
 
             checkoutSplitBranch "${sFile}"
-            renameFile "${sFile}"
-            commitFileContent "${sFile}"
+            renameFile "${sFileName}"
+            commitFileContent "${sFileName}"
         #fi
     done
 }
@@ -511,33 +514,35 @@ mergeSplitBranches() {
 runCleanup() {
     local sBranchName sFile
 
-    read -n1 -p 'Remove all created branches? (y/n) ' sContinue
-    echo ""
+    if [[ "${g_sSourceBranch:-}" && "${g_sSplitDirectory:-}" ]];then
+        read -n1 -p 'Remove all created branches? (y/n) ' sContinue
+        echo ""
 
-    if [[ "${sContinue}" = 'y' ]];then
-        printStatus 'Removing all the split branches that were created'
+        if [[ "${sContinue}" = 'y' ]];then
+            printStatus 'Removing all the split branches that were created'
 
-        git branch -D "${g_sSourceBranch}" | indent
+            git branch -D "${g_sSourceBranch}" | indent
 
-        for sFile in ${g_sSplitDirectory}/*;do
-            sBranchName="${g_sSourceBranch}_${sFile}"
+            for sFile in ${g_sSplitDirectory}/*;do
+                sBranchName="${g_sSourceBranch}_${sFile}"
+
+                # shellcheck disable=SC2086
+                if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
+                    # Branch exists
+                    git branch -D "${sBranchName}" | indent
+                fi
+            done
+            sBranchName="${g_sSourceBranch}_${g_sSourceFileName}"
 
             # shellcheck disable=SC2086
             if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
                 # Branch exists
                 git branch -D "${sBranchName}" | indent
             fi
-        done
-        sBranchName="${g_sSourceBranch}_${g_sSourceFileName}"
 
-        # shellcheck disable=SC2086
-        if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
-            # Branch exists
-            git branch -D "${sBranchName}" | indent
+        else
+            printStatus 'Leaving all branches in place.'
         fi
-
-    else
-        printStatus 'Leaving all branches in place.'
     fi
 
     printRuler 2
