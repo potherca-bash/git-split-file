@@ -151,7 +151,7 @@ indent() {
 # ==============================================================================
 
 # ==============================================================================
-message() {
+printMessage() {
 # ------------------------------------------------------------------------------
     echo -e "# ${*}" >&1
 }
@@ -160,7 +160,7 @@ message() {
 # ==============================================================================
 # Output all given Messages to STDERR
 # ------------------------------------------------------------------------------
-outputErrorMessages() {
+printErrorMessages() {
     echo -e "\nErrors occurred:\n\n ${*}" >&2
 }
 # ==============================================================================
@@ -197,7 +197,7 @@ printRuler() {
 
     sRuler=$(printf -- "${sCharacter}%.0s" {1..40})
 
-    message "${sRuler}"
+    printMessage "${sRuler}"
 }
 # ==============================================================================
 
@@ -317,7 +317,7 @@ handleParams() {
 # ##############################################################################
 #                              UTILITY FUNCTIONS
 # ##############################################################################
-debugMessage() {
+printDebug() {
     if [[ "${DEBUG_LEVEL}" -gt 0 && "${DEBUG_LEVEL}" -lt 5 ]];then
         debug "${1}"
     fi
@@ -524,26 +524,26 @@ runCleanup() {
     printRuler 2
 }
 
-outputHeader() {
+printHeader() {
 
-    message "               running $0"
-    message "       for source file ${g_sSourceFilePath}"
-    message " with source directory ${g_sSplitDirectory}"
-    message "   to target directory ${g_sTargetDirectory}"
-    message "  using split strategy ${g_sStrategy}"
+    printMessage "               running $0"
+    printMessage "       for source file ${g_sSourceFilePath}"
+    printMessage " with source directory ${g_sSplitDirectory}"
+    printMessage "   to target directory ${g_sTargetDirectory}"
+    printMessage "  using split strategy ${g_sStrategy}"
 
-    debugMessage "g_sRootBranch      = ${g_sRootBranch}"
-    debugMessage "g_sSourceBranch     = ${g_sSourceBranch}"
-    debugMessage "g_sSourceFilePath  = ${g_sSourceFilePath}"
-    debugMessage "g_sSourceFileName  = ${g_sSourceFileName}"
-    debugMessage "g_sSplitDirectory  = ${g_sSplitDirectory}"
-    debugMessage "g_sTargetDirectory = ${g_sTargetDirectory}"
-    debugMessage "g_sStrategy        = ${g_sStrategy}"
+    printDebug "g_sRootBranch      = ${g_sRootBranch}"
+    printDebug "g_sSourceBranch    = ${g_sSourceBranch}"
+    printDebug "g_sSourceFilePath  = ${g_sSourceFilePath}"
+    printDebug "g_sSourceFileName  = ${g_sSourceFileName}"
+    printDebug "g_sSplitDirectory  = ${g_sSplitDirectory}"
+    printDebug "g_sTargetDirectory = ${g_sTargetDirectory}"
+    printDebug "g_sStrategy        = ${g_sStrategy}"
 }
 
 run() {
 
-    outputHeader
+    printHeader
 
     if [[ "${DEBUG_LEVEL}" -gt 0 ]];then
         printStatus "Debugging on - Debug Level : ${DEBUG_LEVEL}"
@@ -574,26 +574,26 @@ run() {
         checkoutRootBranch
         git merge --no-ff --no-edit "${g_sSourceBranch}" | indent
     else
-        message 'Aborting.'
+        printMessage 'Aborting.'
     fi
 }
 
 finish() {
     if [[ ! ${g_iExitCode} -eq 0 ]];then
 
-        outputErrorMessages "${g_aErrorMessages[*]}"
+        printErrorMessages "${g_aErrorMessages[*]}"
 
         if [[ ${g_iExitCode} -eq 65 ]];then
             shortUsage "${@}"
         fi
     fi
 
-    debugMessage "Working Directory : $(pwd)"
+    printDebug "Working Directory : $(pwd)"
     if [[ ${g_bInsideGitRepo} = true ]];then
-        debugMessage "Root branch    : $g_sRootBranch"
-        debugMessage "Current branch : $(getCurrentBranch)"
+        printDebug "Root branch    : $g_sRootBranch"
+        printDebug "Current branch : $(getCurrentBranch)"
     else
-        debugMessage "Not in a git repo"
+        printDebug "Not in a git repo"
     fi
 
     if [[ ${g_bInsideGitRepo} = true && "${g_sRootBranch}" != "$(getCurrentBranch)" ]];then
@@ -602,7 +602,7 @@ finish() {
 
     runCleanup
 
-    message 'Done.'
+    printMessage 'Done.'
 
     exit ${g_iExitCode}
 }
