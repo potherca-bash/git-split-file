@@ -67,7 +67,7 @@
 #/
 # Please note that g_iExitCode needs to be set *before* error() is called,
 # otherwise the ExitCode will default to 64.
-#/==============================================================================
+#==============================================================================
 
 
 # ==============================================================================
@@ -217,8 +217,8 @@ printTopic() {
 # ==============================================================================
 
 # ==============================================================================
-## Usage:
-## Displays all lines in main script that start with '##'
+# Usage:
+# Displays all lines in main script that start with '##'
 # ------------------------------------------------------------------------------
 shortUsage() {
     # shellcheck disable=SC2086
@@ -229,8 +229,8 @@ shortUsage() {
 
 
 # ==============================================================================
-#/ Usage:
-#/ Displays all lines in main script that start with '#/'
+# Usage:
+# Displays all lines in main script that start with '#/'
 # ------------------------------------------------------------------------------
 fullUsage() {
     grep '^#/' <"$0" | cut -c4-
