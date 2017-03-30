@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
+
 #/==============================================================================
 # @TODO: Use named parameters instead of relying on parameter order
+# ------------------------------------------------------------------------------
+# @TODO: Add parameter to set author
 # ------------------------------------------------------------------------------
 # @TODO: Add silent mode (-s / --silent) to suppress all output
 # ------------------------------------------------------------------------------
 # @TODO: Add yes mode (-y / --yes) to run without questions
-# ------------------------------------------------------------------------------
-# @TODO: Add verbose mode (-v / -vv / -vvv / --verbose) instead of (low) debug levels
 # ------------------------------------------------------------------------------
 # @FIXME: Add "aggressive" mode that creates a commit on the source branch (?before/after? merge)
 #         of the source file with all of the lines from the split file removed.
@@ -99,6 +100,7 @@ declare -i g_iErrorCount=0
 readonly g_sBranchPrefix='split-file'
 readonly g_sColorDim=$(tput dim)
 readonly g_sColorRestore=$(tput sgr0)
+readonly g_sAuthor='Potherca-Bot <potherca+bot@gmail.com>'
 # ==============================================================================
 
 
@@ -340,7 +342,7 @@ getCurrentBranch() {
 
 commit() {
     printStatus 'Creating commit'
-    git commit -m "${1}." | indent
+    git commit --author="${g_sAuthor}" --message="${1}." | indent
 }
 
 createBranch() {
