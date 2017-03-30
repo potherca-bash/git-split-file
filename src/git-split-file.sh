@@ -79,8 +79,6 @@
 # DEBUG_LEVEL 3 = " and show called command
 # DEBUG_LEVEL 4 = " and show all other commands (=set +x)
 # DEBUG_LEVEL 5 = Show All Commands, without Debug Messages or Application Calls
-
-readonly DEBUG_LEVEL=0
 # ==============================================================================
 
 
@@ -92,16 +90,15 @@ set -o nounset      # Exit script on use of an undefined variable, same as "set 
 set -o errexit      # Exit script when a command exits with non-zero status, same as "set -e"
 set -o pipefail     # Makes pipeline return the exit status of the last command in the pipe that failed
 
-if [ "${DEBUG_LEVEL}" -gt 2 ];then
-    set -o xtrace   # Similar to -v, but expands commands, same as "set -x"
-fi
-
 declare g_bInsideGitRepo=false
 declare g_bShowHelp=false
 declare -a g_aErrorMessages
 declare -i g_iExitCode=0
 declare -i g_iErrorCount=0
+
 readonly g_sBranchPrefix='split-file'
+readonly g_sColorDim=$(tput dim)
+readonly g_sColorRestore=$(tput sgr0)
 # ==============================================================================
 
 
@@ -259,15 +256,25 @@ fullUsage() {
 # ------------------------------------------------------------------------------
 handleParams() {
 
-    local sParam sRootFile sSplitDirectory
+    local iDebugLevel sParam sRootFile sSplitDirectory sTargetDirectory
+
+    iDebugLevel=0
 
     for sParam in "$@";do
         if [[ "${sParam}" = "--help" ]];then
             g_bShowHelp=true
+        elif [[ "${sParam}" = "--verbose" || "${sParam}" = "-v" ]];then
+            iDebugLevel=1
+        elif [[ "${sParam}" = "-vv" ]];then
+            iDebugLevel=2
+        elif [[ "${sParam}" = "-vvv" ]];then
+            iDebugLevel=2
         fi
     done
 
-    if [ "${g_bShowHelp}" = false ] && [  "$#" -ne 4 ];then
+    readonly DEBUG_LEVEL="${iDebugLevel}"
+
+    if [[ "${g_bShowHelp}" = false && "$#" -lt 4 ]];then
         g_iExitCode=65
         error 'This script expects four command-line arguments'
     elif [[ "${g_bShowHelp}" = false ]];then
@@ -310,6 +317,7 @@ handleParams() {
             error "The given split strategy '${g_sStrategy}' is not one of supported DELETE | KEEP | MOVE"
         fi
     fi
+
     return ${g_iExitCode}
 }
 # ==============================================================================
@@ -318,8 +326,11 @@ handleParams() {
 #                              UTILITY FUNCTIONS
 # ##############################################################################
 printDebug() {
+    local aCaller
+
     if [[ "${DEBUG_LEVEL}" -gt 0 && "${DEBUG_LEVEL}" -lt 5 ]];then
-        debug "${1}"
+        aCaller=($(caller))
+        printf "${g_sColorDim}[DEBUG] (line %04d): %s${g_sColorRestore}\n" "${aCaller[0]}"  "$*" >&2
     fi
 }
 
@@ -465,6 +476,10 @@ splitFiles() {
         #    printStatus "Skipping source file '${g_sSourceFileName}'"
         #else
             printTopic "Running split processing for file '${sFile}'"
+
+            printDebug "sFile = ${sFile}"
+            printDebug "sFileName = ${sFileName}"
+
             checkoutSplitBranch "${sFile}"
             renameFile "${sFile}"
             commitFileContent "${sFile}"
@@ -474,7 +489,9 @@ splitFiles() {
 
 mergeSplitBranches() {
     local sFile
+
     printTopic 'Merging all the split branches into the source branch'
+
     checkoutSourceBranch
 
     for sFile in ${g_sSplitDirectory}/*;do
@@ -579,39 +596,49 @@ run() {
 }
 
 finish() {
-    if [[ ! ${g_iExitCode} -eq 0 ]];then
 
-        printErrorMessages "${g_aErrorMessages[*]}"
+    if [[ ! "${bFinished:-}" ]];then
 
-        if [[ ${g_iExitCode} -eq 65 ]];then
-            shortUsage "${@}"
+        readonly bFinished=true
+
+        if [[ ! ${g_iExitCode} -eq 0 ]];then
+            printErrorMessages "${g_aErrorMessages[*]}"
+
+            if [[ ${g_iExitCode} -eq 65 ]];then
+                shortUsage "${@}"
+            fi
         fi
+
+        printDebug "Working Directory : $(pwd)"
+        if [[ ${g_bInsideGitRepo} = true ]];then
+            printDebug "Root branch    : $g_sRootBranch"
+            printDebug "Current branch : $(getCurrentBranch)"
+        else
+            printDebug "Not in a git repo"
+        fi
+
+        if [[ ${g_bInsideGitRepo} = true && "${g_sRootBranch}" != "$(getCurrentBranch)" ]];then
+            checkoutRootBranch
+        fi
+
+        runCleanup
+
+        printMessage 'Done.'
     fi
-
-    printDebug "Working Directory : $(pwd)"
-    if [[ ${g_bInsideGitRepo} = true ]];then
-        printDebug "Root branch    : $g_sRootBranch"
-        printDebug "Current branch : $(getCurrentBranch)"
-    else
-        printDebug "Not in a git repo"
-    fi
-
-    if [[ ${g_bInsideGitRepo} = true && "${g_sRootBranch}" != "$(getCurrentBranch)" ]];then
-        checkoutRootBranch
-    fi
-
-    runCleanup
-
-    printMessage 'Done.'
 
     exit ${g_iExitCode}
 }
 
-registerTraps() {
+function debugTrapMessage {
+    printDebug "${g_sColorDim}[${1}:${2}] ${3}${g_sColorRestore}"
+}
 
+registerTraps() {
     trap finish EXIT
     trap finish ERR
+}
 
+registerDebugTrap() {
     if [[ "${DEBUG_LEVEL}" -gt 1 && "${DEBUG_LEVEL}" -lt 5 ]];then
         # Trap function is defined inline so we get the correct line number
         #trap '(echo -e "#[DEBUG] [$(basename ${BASH_SOURCE[0]}):${LINENO[0]}] ${BASH_COMMAND}");' DEBUG
@@ -624,8 +651,17 @@ registerTraps() {
 # ==============================================================================
 #                               RUN LOGIC
 # ------------------------------------------------------------------------------
+export PS4='$(printf "%04d: " $LINENO)'
+
 registerTraps
+
 handleParams "${@:-}"
+
+registerDebugTrap
+
+if [[ "${DEBUG_LEVEL}" -gt 2 ]];then
+    set -o xtrace   # Similar to -v, but expands commands, same as "set -x"
+fi
 
 if [[ ${g_iExitCode} -eq 0 ]];then
 
