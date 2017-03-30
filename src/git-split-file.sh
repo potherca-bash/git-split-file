@@ -112,9 +112,9 @@ readonly g_sBranchPrefix='split-file'
 # Store given message in the ErrorMessage array
 # ------------------------------------------------------------------------------
 error() {
-    if [ ! -z "${2:-}" ];then
+    if [[ ! -z "${2:-}" ]];then
         g_iExitCode=${2}
-    elif [ "${g_iExitCode}" -eq 0 ];then
+    elif [[ "${g_iExitCode}" -eq 0 ]];then
         g_iExitCode=64
     fi
 
@@ -140,7 +140,7 @@ indent() {
     # @CHECKME: Shouldn't the line below be used?
     # c="${1:+"2,999"} s/^/       /"
     c='s/^/       /g'
-    if [ "$(uname -s)" == "Darwin" ];then
+    if [[ "$(uname -s)" == "Darwin" ]];then
         # mac/bsd sed: -l buffers on line boundaries
         sed -l "$c"
     else
@@ -262,7 +262,7 @@ handleParams() {
     local sParam sRootFile sSplitDirectory
 
     for sParam in "$@";do
-        if [ "${sParam}" = "--help" ];then
+        if [[ "${sParam}" = "--help" ]];then
             g_bShowHelp=true
         fi
     done
@@ -270,14 +270,14 @@ handleParams() {
     if [ "${g_bShowHelp}" = false ] && [  "$#" -ne 4 ];then
         g_iExitCode=65
         error 'This script expects four command-line arguments'
-    elif [ "${g_bShowHelp}" = false ];then
+    elif [[ "${g_bShowHelp}" = false ]];then
         readonly g_sTargetDirectory="${3}"
         readonly  g_sStrategy="${4}"
 
         sRootFile=$(readlink -f "${1}")
         sSplitDirectory=$(readlink -f "${2}")
 
-        if [ ! -f "${sRootFile}" ];then
+        if [[ ! -f "${sRootFile}" ]];then
             g_iExitCode=66
             error "The given root file '${1}' does not exist"
         else
@@ -285,7 +285,7 @@ handleParams() {
             readonly g_sSourceFileName=$(basename "${g_sSourceFilePath}")
 
             # shellcheck disable=SC2086
-            if [ "$(git status ${g_sSourceFilePath} > /dev/null 2>&1 || echo '1')" ];then
+            if [[ "$(git status ${g_sSourceFilePath} > /dev/null 2>&1 || echo '1')" ]];then
                 g_iExitCode=67
                 error "The given split file '${g_sSourceFilePath}' is not part of a git repository"
             else
@@ -295,17 +295,17 @@ handleParams() {
             fi
         fi
 
-        if [ ! -e "${sSplitDirectory}" ];then
+        if [[ ! -e "${sSplitDirectory}" ]];then
             g_iExitCode=68
             error "The given split directory '${2}' does not exist"
-        elif [ ! -d "${sSplitDirectory}" ];then
+        elif [[ ! -d "${sSplitDirectory}" ]];then
             g_iExitCode=69
             error "The given split directory '${2}' is not a directory"
         else
             readonly g_sSplitDirectory="${sSplitDirectory}"
         fi
 
-        if [ "${g_sStrategy}" != 'DELETE' ] && [ "${g_sStrategy}" != 'KEEP' ] && [ "${g_sStrategy}" != 'MOVE' ]; then
+        if [[ "${g_sStrategy}" != 'DELETE' && "${g_sStrategy}" != 'KEEP' && "${g_sStrategy}" != 'MOVE' ]];then
             g_iExitCode=71
             error "The given split strategy '${g_sStrategy}' is not one of supported DELETE | KEEP | MOVE"
         fi
@@ -318,7 +318,7 @@ handleParams() {
 #                              UTILITY FUNCTIONS
 # ##############################################################################
 debugMessage() {
-    if [ "${DEBUG_LEVEL}" -gt 0 ] && [ "${DEBUG_LEVEL}" -lt 5 ];then
+    if [[ "${DEBUG_LEVEL}" -gt 0 && "${DEBUG_LEVEL}" -lt 5 ]];then
         debug "${1}"
     fi
 }
@@ -384,11 +384,11 @@ mergeSplitBranch() {
     printTopic "Merging branch '${sBranchName}' back into '$(getCurrentBranch)'"
 
     # shellcheck disable=SC2086
-    if [ -n "$(git show-ref refs/heads/${sBranchName})" ]; then
+    if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
         printStatus "Branch '${sBranchName}' exists"
         git merge --no-ff --no-edit -X theirs "${sBranchName}" | indent || iResult="$?"
 
-        if [ "${iResult}" -eq 0 ]; then
+        if [[ "${iResult}" -eq 0 ]];then
             printStatus 'No merge conflict'
         else
             printStatus 'Merge conflict occurred. Attempting to resolve.'
@@ -404,18 +404,18 @@ mergeSplitBranch() {
 renameFile() {
     local sFile="${1}"
 
-    if [ ! -f "${g_sSourceFilePath}" ];then
+    if [[ ! -f "${g_sSourceFilePath}" ]];then
         printStatus "File '${g_sSourceFilePath}' does not exist. Checking out from '${g_sRootBranch}'"
         git checkout "${g_sRootBranch}" -- "${g_sSourceFilePath}"
     fi
 
-    if [ ! -d "${g_sTargetDirectory}" ];then
+    if [[ ! -d "${g_sTargetDirectory}" ]];then
         printStatus "Target directory '${g_sTargetDirectory}' does not exist"
         printStatus "Creating target directory '${g_sTargetDirectory}'"
         mkdir -p "${g_sTargetDirectory}"
     fi
 
-    if [ "${sFile}" = "${g_sSourceFileName}" ];then
+    if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
         printStatus "File is root file '${g_sSourceFileName}', no need to rename"
     else
         printStatus "Creating separate file for '${sFile}'"
@@ -429,7 +429,7 @@ commitFileContent() {
 
     sFile="${1}"
 
-    if [ "${sFile}" = "${g_sSourceFileName}" ];then
+    if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
         printStatus "Writing content to source file '${g_sSourceFileName}'"
         sMessage="Removes content that has been split of from '${sFile}'"
         sTargetFile="${g_sSourceFilePath}"
@@ -449,7 +449,7 @@ createSubBranches() {
 
     printTopic 'Creating sub-branches'
     for sFile in ${g_sSplitDirectory}/*;do
-        #if [ "${sFile}" = "${g_sSourceFileName}" ];then
+        #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
         #    printStatus "Skipping branch for source file '${g_sSourceFileName}'"
         #else
             createSplitBranch "${sFile}"
@@ -461,7 +461,7 @@ splitFiles() {
     local sFile
 
     for sFile in ${g_sSplitDirectory}/*;do
-        #if [ "${sFile}" = "${g_sSourceFileName}" ];then
+        #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
         #    printStatus "Skipping source file '${g_sSourceFileName}'"
         #else
             printTopic "Running split processing for file '${sFile}'"
@@ -478,7 +478,7 @@ mergeSplitBranches() {
     checkoutSourceBranch
 
     for sFile in ${g_sSplitDirectory}/*;do
-        if [ "${sFile}" = "${g_sSourceFileName}" ];then
+        if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
             printTopic "Skipping source file '${g_sSourceFileName}'"
         else
             printTopic "Running merge processing for file '${sFile}'"
@@ -495,7 +495,7 @@ runCleanup() {
     read -n1 -p 'Remove all created branches? (y/n) ' sContinue
     echo ""
 
-    if [ "${sContinue}" = 'y' ];then
+    if [[ "${sContinue}" = 'y' ]];then
         printStatus 'Removing all the split branches that were created'
 
         git branch -D "${g_sSourceBranch}" | indent
@@ -504,7 +504,7 @@ runCleanup() {
             sBranchName="${g_sSourceBranch}_${sFile}"
 
             # shellcheck disable=SC2086
-            if [ -n "$(git show-ref refs/heads/${sBranchName})" ]; then
+            if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
                 # Branch exists
                 git branch -D "${sBranchName}" | indent
             fi
@@ -512,7 +512,7 @@ runCleanup() {
         sBranchName="${g_sSourceBranch}_${g_sSourceFileName}"
 
         # shellcheck disable=SC2086
-        if [ -n "$(git show-ref refs/heads/${sBranchName})" ]; then
+        if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
             # Branch exists
             git branch -D "${sBranchName}" | indent
         fi
@@ -545,14 +545,14 @@ run() {
 
     outputHeader
 
-    if [ "${DEBUG_LEVEL}" -gt 0 ];then
+    if [[ "${DEBUG_LEVEL}" -gt 0 ]];then
         printStatus "Debugging on - Debug Level : ${DEBUG_LEVEL}"
     fi
 
     read -n1 -p 'Does this look correct? (y/n) ' sContinue
     echo ""
 
-    if [ "${sContinue}" = 'y' ];then
+    if [[ "${sContinue}" = 'y' ]];then
         createSourceBranch
 
         # Process all non-source files
@@ -579,23 +579,24 @@ run() {
 }
 
 finish() {
-    if [ ! ${g_iExitCode} -eq 0 ];then
+    if [[ ! ${g_iExitCode} -eq 0 ]];then
+
         outputErrorMessages "${g_aErrorMessages[*]}"
 
-        if [ ${g_iExitCode} -eq 65 ];then
+        if [[ ${g_iExitCode} -eq 65 ]];then
             shortUsage "${@}"
         fi
     fi
 
     debugMessage "Working Directory : $(pwd)"
-    if [ ${g_bInsideGitRepo} = true ];then
+    if [[ ${g_bInsideGitRepo} = true ]];then
         debugMessage "Root branch    : $g_sRootBranch"
         debugMessage "Current branch : $(getCurrentBranch)"
     else
         debugMessage "Not in a git repo"
     fi
 
-    if [ ${g_bInsideGitRepo} = true ] && [  "${g_sRootBranch}" != "$(getCurrentBranch)" ] ;then
+    if [[ ${g_bInsideGitRepo} = true && "${g_sRootBranch}" != "$(getCurrentBranch)" ]];then
         checkoutRootBranch
     fi
 
@@ -611,7 +612,7 @@ registerTraps() {
     trap finish EXIT
     trap finish ERR
 
-    if [ "${DEBUG_LEVEL}" -gt 1 ] && [ "${DEBUG_LEVEL}" -lt 5 ];then
+    if [[ "${DEBUG_LEVEL}" -gt 1 && "${DEBUG_LEVEL}" -lt 5 ]];then
         # Trap function is defined inline so we get the correct line number
         #trap '(echo -e "#[DEBUG] [$(basename ${BASH_SOURCE[0]}):${LINENO[0]}] ${BASH_COMMAND}");' DEBUG
         trap '(debugTrapMessage "$(basename ${BASH_SOURCE[0]})" "${LINENO[0]}" "${BASH_COMMAND}");' DEBUG
@@ -626,9 +627,9 @@ registerTraps() {
 registerTraps
 handleParams "${@:-}"
 
-if [ ${g_iExitCode} -eq 0 ];then
+if [[ ${g_iExitCode} -eq 0 ]];then
 
-    if [ "${g_bShowHelp}" = true ];then
+    if [[ "${g_bShowHelp}" = true ]];then
         fullUsage
     else
         run
