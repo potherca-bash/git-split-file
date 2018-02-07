@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#/==============================================================================
+#===============================================================================
 # @TODO: Use named parameters instead of relying on parameter order
 # ------------------------------------------------------------------------------
 # @TODO: Add parameter to set author
@@ -12,14 +12,14 @@
 # @FIXME: Add "aggressive" mode that creates a commit on the source branch (?before/after? merge)
 #         of the source file with all of the lines from the split file removed.
 # - Using grep?
-# - Programatically creating a git patch?
+# - Programmatically creating a git patch?
 # - Doing a "reverse" patch? (http://stackoverflow.com/questions/16059771/reverse-apply-a-commit-to-working-copy)
 # - Creating a reverse diff? (http://stackoverflow.com/a/3902431/153049)
 # - Use patch created with GNU diff and use patch --reverse? (http://www.gnu.org/software/diffutils/manual/html_node/Reversed-Patches.html)
 # So many options.
 #
 # grep -Fvxf <remove> <all-lines>
-#/==============================================================================
+#===============================================================================
 
 #/==============================================================================
 #/                               GIT SPLIT FILE
@@ -37,9 +37,9 @@
 ## Call --help for more details
 ##
 #/ Usually when you want to split a file into several files under git, you would
-#/ lose the git history of this file. Often this is not desirable. The goal of
+#/ loose the git history of this file. Often this is not desirable. The goal of
 #/ this script is to enable splitting one file under Git revision control into
-#/ multiple files whilst keeping the files git history intact.
+#/ multiple files whilst keeping the file's git history intact.
 #/
 #/ For this script to work, you need to first create a folder that contains the
 #/ end result you want. This means you need to manually split the content of the
@@ -56,8 +56,8 @@
 #/ ------------------------------------------------------------------------------
 #/ The following ExitCodes are used:
 #/
-#/  0  : Everything OK
-#/ 64  : Undefined Error
+#/  0 : Everything OK
+#/ 64 : Undefined Error
 #/
 #/ 65 : Not enough parameters given
 #/ 66 : The given root file does not exist
@@ -128,7 +128,7 @@ error() {
 # ==============================================================================
 # sed -l basically makes sed replace and buffer through stdin to stdout
 # so you get updates while the command runs and dont wait for the end
-# e.g. npm install | indent
+# e.g. npm install
 # ------------------------------------------------------------------------------
 indent() {
   # if an arg is given it's a flag indicating we shouldn't indent the first line,
@@ -233,6 +233,8 @@ shortUsage() {
 # ------------------------------------------------------------------------------
 fullUsage() {
     grep '^#/' <"$0" | cut -c4-
+
+    shortUsage
 }
 # ==============================================================================
 
@@ -342,7 +344,7 @@ getCurrentBranch() {
 
 commit() {
     printStatus 'Creating commit'
-    git commit --author="${g_sAuthor}" --message="${1}." | indent
+    git commit --author="${g_sAuthor}" --message="${1}."
 }
 
 createBranch() {
@@ -351,8 +353,8 @@ createBranch() {
     sBranchName="${1}"
     sStartBranch="${2}"
 
-    #git checkout -b "${sBranchName}" "${sStartBranch}" | indent
-    git branch "${sBranchName}" "${sStartBranch}" | indent
+    #git checkout -b "${sBranchName}" "${sStartBranch}"
+    git branch "${sBranchName}" "${sStartBranch}"
 }
 
 createSourceBranch() {
@@ -375,7 +377,7 @@ createSplitBranch() {
 
 checkoutBranch() {
     printStatus "Switching to ${2} branch"
-    git checkout "${1}" | indent
+    git checkout "${1}"
 }
 
 checkoutSplitBranch() {
@@ -408,16 +410,19 @@ mergeSplitBranch() {
     # shellcheck disable=SC2086
     if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
         printStatus "Branch '${sBranchName}' exists"
-        git merge --no-ff --no-edit -X theirs "${sBranchName}" | indent || iResult="$?"
 
-        if [[ "${iResult}" -eq 0 ]];then
-            printStatus 'No merge conflict'
-        else
+        (
+            git merge --no-ff --no-edit -X theirs "${sBranchName}" \
+                && printStatus 'No merge conflict'
+        ) || (
             printStatus 'Merge conflict occurred. Attempting to resolve.'
-            git add -- "${g_sSourceFilePath}" | indent
-
-            commit "Merging split file '${g_sSourceFileName}'"
-        fi
+            git add -- "${g_sSourceFilePath}" \
+                && commit "Merging split file '${g_sSourceFileName}'"
+        ) || (
+            printStatus 'Merge conflict remains. Attempting to resolve more aggressively.'
+            git add $(cat git-status.log | grep -o -E 'added by us: .*' | cut -d ':' -f 2) \
+                && commit "Merging split file '${g_sSourceFileName}'"
+        )
     else
         printStatus "Branch does not exist. No need to merge"
     fi
@@ -430,7 +435,7 @@ renameFile() {
 
     if [[ ! -f "${g_sSourceFilePath}" ]];then
         printStatus "File '${g_sSourceFilePath}' does not exist. Checking out from '${g_sRootBranch}'"
-        git checkout "${g_sRootBranch}" -- "${g_sSourceFilePath}" | indent
+        git checkout "${g_sRootBranch}" -- "${g_sSourceFilePath}"
     fi
 
     if [[ ! -d "${g_sTargetDirectory}" ]];then
@@ -443,7 +448,7 @@ renameFile() {
         printStatus "File is root file '${g_sSourceFileName}', no need to rename"
     else
         printStatus "Creating separate file for '${sFile}'"
-        git mv "${g_sSourceFilePath}" "${g_sTargetDirectory}/${sFile}" | indent
+        git mv "${g_sSourceFilePath}" "${g_sTargetDirectory}/${sFile}"
         commit "Adds separate file for '${sFile}'"
     fi
 }
@@ -464,7 +469,7 @@ commitFileContent() {
     fi
 
     cat "${g_sSplitDirectory}/${sFile}" > "${sTargetFile}"
-    git add "${sTargetFile}" | indent
+    git add "${sTargetFile}"
     commit "${sMessage}"
 }
 
@@ -472,7 +477,7 @@ createSubBranches() {
     local sFile
 
     printTopic 'Creating sub-branches'
-    for sFile in ${g_sSplitDirectory}/*;do
+    for sFile in "${g_sSplitDirectory}/"*;do
         #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
         #    printStatus "Skipping branch for source file '${g_sSourceFileName}'"
         #else
@@ -484,11 +489,11 @@ createSubBranches() {
 splitFiles() {
     local sFile sFileName
 
-    for sFile in ${g_sSplitDirectory}/*;do
+    for sFile in "${g_sSplitDirectory}/"*;do
         sFileName=$(basename "${sFile}")
-        #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
-        #    printStatus "Skipping source file '${g_sSourceFileName}'"
-        #else
+        if [[ "${sFileName}" = "${g_sSourceFileName}" ]];then
+            printTopic "Skipping source file '${g_sSourceFileName}'"
+        else
             printTopic "Running split processing for file '${sFile}'"
 
             printDebug "sFile = ${sFile}"
@@ -497,7 +502,7 @@ splitFiles() {
             checkoutSplitBranch "${sFile}"
             renameFile "${sFileName}"
             commitFileContent "${sFileName}"
-        #fi
+        fi
     done
 }
 
@@ -508,8 +513,8 @@ mergeSplitBranches() {
 
     checkoutSourceBranch
 
-    for sFile in ${g_sSplitDirectory}/*;do
-        if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
+    for sFile in "${g_sSplitDirectory}/"*;do
+        if [[ "$(basename ${sFile})" = "$(basename ${g_sSourceFileName})" ]];then
             printTopic "Skipping source file '${g_sSourceFileName}'"
         else
             printTopic "Running merge processing for file '${sFile}'"
@@ -524,21 +529,26 @@ runCleanup() {
     local sBranchName sFile
 
     if [[ "${g_sSourceBranch:-}" && "${g_sSplitDirectory:-}" ]];then
-        read -n1 -p 'Remove all created branches? (y/n) ' sContinue
+        read -n1 -p 'Cleanup all the things? (y/n) ' sContinue
         echo ""
 
         if [[ "${sContinue}" = 'y' ]];then
             printStatus 'Removing all the split branches that were created'
 
-            git branch -D "${g_sSourceBranch}" | indent
+            if [[ ${g_bInsideGitRepo} = true && "${g_sRootBranch}" != "$(getCurrentBranch)" ]];then
+                git merge --abort
+                checkoutRootBranch
+            fi
 
-            for sFile in ${g_sSplitDirectory}/*;do
+            git branch -D "${g_sSourceBranch}"
+
+            for sFile in "${g_sSplitDirectory}/"*;do
                 sBranchName=$(createBranchName "${sFile}")
 
                 # shellcheck disable=SC2086
                 if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
                     # Branch exists
-                    git branch -D "${sBranchName}" | indent
+                    git branch -D "${sBranchName}"
                 fi
             done
             sBranchName=$(createBranchName "${g_sSourceFileName}")
@@ -546,11 +556,11 @@ runCleanup() {
             # shellcheck disable=SC2086
             if [[ -n "$(git show-ref refs/heads/${sBranchName})" ]];then
                 # Branch exists
-                git branch -D "${sBranchName}" | indent
+                git branch -D "${sBranchName}"
             fi
 
         else
-            printStatus 'Leaving all branches in place.'
+            printStatus 'Leaving everything as-is.'
         fi
     fi
 
@@ -559,7 +569,7 @@ runCleanup() {
 
 printHeader() {
 
-    printMessage "               running $0"
+    printMessage "               running $(basename $0)"
     printMessage "       for source file ${g_sSourceFilePath}"
     printMessage " with source directory ${g_sSplitDirectory}"
     printMessage "   to target directory ${g_sTargetDirectory}"
@@ -591,21 +601,27 @@ run() {
         # Process all non-source files
         createSubBranches
         splitFiles
-
-        # ---
-        # @TODO: Utilize the strategy flag.
-        # ---
-        #printTopic "Running split process for source file '${g_sSourceFileName}'"
-        #checkoutSourceBranch
-        #commitFileContent "${g_sSourceFileName}"
-
         mergeSplitBranches
-        # @NOTE: If a branch for g_sSourceFileName is present we need to merge that last
+
+        # Process the source file
+        printTopic "Running split process for source file '${g_sSourceFileName}'"
+        checkoutSourceBranch
+
+        if [[ ${g_sStrategy} = 'KEEP' ]];then
+            echo '@CHECKME: Nothing to do?'
+        elif [[ ${g_sStrategy} = 'MOVE' ]];then
+            commitFileContent "${g_sSourceFileName}"
+        elif [[ ${g_sStrategy} = 'DELETE' ]];then
+            git rm "${g_sSourceFilePath}"
+            commit "Removes '${g_sSourceFilePath}' file that has been split."
+        else
+            error "Unsupported merge strategy '${g_sStrategy}'" 70
+        fi
         mergeSplitBranch "${g_sSourceFileName}"
 
         printTopic "Merging source branch '${g_sSourceBranch}' into the root branch '${g_sRootBranch}'"
         checkoutRootBranch
-        git merge --no-ff --no-edit "${g_sSourceBranch}" | indent
+        git merge --no-ff --no-edit "${g_sSourceBranch}"
     else
         printMessage 'Aborting.'
     fi
@@ -631,10 +647,6 @@ finish() {
             printDebug "Current branch : $(getCurrentBranch)"
         else
             printDebug "Not in a git repo"
-        fi
-
-        if [[ ${g_bInsideGitRepo} = true && "${g_sRootBranch}" != "$(getCurrentBranch)" ]];then
-            checkoutRootBranch
         fi
 
         runCleanup
@@ -671,7 +683,7 @@ export PS4='$(printf "%04d: " $LINENO)'
 
 registerTraps
 
-handleParams "${@:-}"
+handleParams "${@}"
 
 registerDebugTrap
 
