@@ -259,7 +259,6 @@ fullUsage() {
 #
 # ------------------------------------------------------------------------------
 handleParams() {
-
     local iDebugLevel sParam sRootFile sSplitDirectory
 
     iDebugLevel=0
@@ -568,7 +567,6 @@ runCleanup() {
 }
 
 printHeader() {
-
     printMessage "               running $(basename $0)"
     printMessage "       for source file ${g_sSourceFilePath}"
     printMessage " with source directory ${g_sSplitDirectory}"
@@ -628,7 +626,6 @@ run() {
 }
 
 finish() {
-
     if [[ ! "${bFinished:-}" ]];then
 
         readonly bFinished=true
@@ -679,25 +676,35 @@ registerDebugTrap() {
 # ==============================================================================
 #                               RUN LOGIC
 # ------------------------------------------------------------------------------
-export PS4='$(printf "%04d: " $LINENO)'
+git-split-file() {
+    export PS4='$(printf "%04d: " $LINENO)'
 
-registerTraps
+    registerTraps
 
-handleParams "${@}"
+    handleParams "${@}"
 
-registerDebugTrap
+    registerDebugTrap
 
-if [[ "${DEBUG_LEVEL}" -gt 2 ]];then
-    set -o xtrace   # Similar to -v, but expands commands, same as "set -x"
-fi
-
-if [[ ${g_iExitCode} -eq 0 ]];then
-
-    if [[ "${g_bShowHelp}" = true ]];then
-        fullUsage
-    else
-        run
+    if [[ "${DEBUG_LEVEL}" -gt 2 ]];then
+        set -o xtrace   # Similar to -v, but expands commands, same as "set -x"
     fi
+
+    if [[ ${g_iExitCode} -eq 0 ]];then
+
+        if [[ "${g_bShowHelp}" = true ]];then
+            fullUsage
+        else
+            run
+        fi
+    fi
+}
+
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+    export -f git-split-file
+else
+    git-split-file "${@}"
+    exit $?
 fi
 # ==============================================================================
+
 #EOF
