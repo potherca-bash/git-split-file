@@ -34,8 +34,6 @@
 ##       - <split-strategy> is the strategy that should be applied to the source-file
 ##         Can be one of DELETE | KEEP | MOVE
 ##
-## Call --help for more details
-##
 #/ Usually when you want to split a file into several files under git, you would
 #/ loose the git history of this file. Often this is not desirable. The goal of
 #/ this script is to enable splitting one file under Git revision control into
@@ -196,10 +194,8 @@ printTopic() {
 # Displays all lines in main script that start with '##'
 # ------------------------------------------------------------------------------
 shortUsage() {
-    # shellcheck disable=SC2086
-    [ "$*" ] && echo "$(basename $0): $*"
-    sed -n '/^##/,/^$/s/^## \{0,1\}//p' "$0"
-} #2>/dev/null
+    grep '^##' <"$0" | cut -c4-
+}
 # ==============================================================================
 
 
@@ -610,7 +606,9 @@ finish() {
             printErrorMessages "${g_aErrorMessages[*]}"
 
             if [[ ${g_iExitCode} -eq 65 ]];then
-                shortUsage "${@}"
+                shortUsage
+                echo 'Call --help for more details'
+
             fi
         fi
 
