@@ -9,6 +9,10 @@
 # ------------------------------------------------------------------------------
 # @TODO: Add yes mode (-y / --yes) to run without questions
 # ------------------------------------------------------------------------------
+# @FIXME: Merge commit happens from the wrong author
+# ------------------------------------------------------------------------------
+# @FIXME: The cleanup gives errors if cleanup is run before/without the split being run
+# ------------------------------------------------------------------------------
 # @FIXME: Add "aggressive" mode that creates a commit on the source branch (?before/after? merge)
 #         of the source file with all of the lines from the split file removed.
 # - Using grep?
@@ -32,7 +36,7 @@
 ##         things to be after the file has been split.
 ##       - <target-path> is the directory where the split files should be committed to
 ##       - <split-strategy> is the strategy that should be applied to the source-file
-##         Can be one of DELETE | KEEP | MOVE
+##         Can be one of DELETE | MOVE
 ##
 #/ Usually when you want to split a file into several files under git, you would
 #/ loose the git history of this file. Often this is not desirable. The goal of
@@ -251,9 +255,9 @@ handleParams() {
             readonly g_sSplitDirectory="${sSplitDirectory}"
         fi
 
-        if [[ "${g_sStrategy}" != 'DELETE' && "${g_sStrategy}" != 'KEEP' && "${g_sStrategy}" != 'MOVE' ]];then
+        if [[ "${g_sStrategy}" != 'DELETE' && "${g_sStrategy}" != 'MOVE' ]];then
             g_iExitCode=71
-            error "The given split strategy '${g_sStrategy}' is not one of supported DELETE | KEEP | MOVE"
+            error "The given split strategy '${g_sStrategy}' is not one of supported DELETE | MOVE"
         fi
     fi
 
@@ -413,11 +417,11 @@ createSubBranches() {
 
     printTopic 'Creating sub-branches'
     for sFile in "${g_sSplitDirectory}/"*;do
-        #if [[ "${sFile}" = "${g_sSourceFileName}" ]];then
-        #    printStatus "Skipping branch for source file '${g_sSourceFileName}'"
-        #else
+        # if [[ "${sFile}" = "${g_sSourceFileName}" && "${g_sStrategy}" != "MOVE" ]];then
+        #     printStatus "Skipping branch for source file '${g_sSourceFileName}'"
+        # else
             createSplitBranch "${sFile}"
-        #fi
+        # fi
     done
 }
 
@@ -541,20 +545,20 @@ run() {
         printTopic "Running split process for source file '${g_sSourceFileName}'"
         checkoutSourceBranch
 
-        if [[ ${g_sStrategy} = 'KEEP' ]];then
-            echo '@CHECKME: Nothing to do?'
-        elif [[ ${g_sStrategy} = 'MOVE' ]];then
+        if [[ ${g_sStrategy} = 'MOVE' ]];then
             commitFileContent "${g_sSourceFileName}"
+            mergeSplitBranch "${g_sSourceFileName}"
         elif [[ ${g_sStrategy} = 'DELETE' ]];then
-            git rm "${g_sSourceFilePath}"
-            commit "Removes '${g_sSourceFilePath}' file that has been split."
+            printStatus 'Nothing to do for DELETE as file has already been renamed.'
+            # git rm "${g_sSourceFilePath}"
+            # commit "Removes '${g_sSourceFilePath}' file that has been split."
         else
             error "Unsupported merge strategy '${g_sStrategy}'" 70
         fi
-        mergeSplitBranch "${g_sSourceFileName}"
 
         printTopic "Merging source branch '${g_sSourceBranch}' into the root branch '${g_sRootBranch}'"
         checkoutRootBranch
+
         git merge --no-ff --no-edit "${g_sSourceBranch}"
     else
         printMessage 'Aborting.'
@@ -572,7 +576,6 @@ finish() {
             if [[ ${g_iExitCode} -eq 65 ]];then
                 shortUsage
                 echo 'Call --help for more details'
-
             fi
         fi
 
@@ -592,7 +595,7 @@ finish() {
     exit ${g_iExitCode}
 }
 
-function debugTrapMessage {
+debugTrapMessage() {
     printDebug "${g_sColorDim}[${1}:${2}] ${3}${g_sColorRestore}"
 }
 
