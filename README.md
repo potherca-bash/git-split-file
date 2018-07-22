@@ -65,7 +65,7 @@ In order to function, the script needs to know a few things:
 - The source file that is to be split (the source file)
 - The directory where the split files are located (the source directory)
 - The location where the split files should be placed in the repository (the target path)
-- Whether to delete, keep or move the source file. (the split strategy)
+- Whether to delete or move the source file. (the split strategy)
 
 Currently moving the source file to another location than the target path is not
 supported.
