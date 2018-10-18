@@ -9,8 +9,6 @@
 # ------------------------------------------------------------------------------
 # @TODO: Add yes mode (-y / --yes) to run without questions
 # ------------------------------------------------------------------------------
-# @FIXME: Merge commit happens from the wrong author
-# ------------------------------------------------------------------------------
 # @FIXME: The cleanup gives errors if cleanup is run before/without the split being run
 # ------------------------------------------------------------------------------
 # @FIXME: Add "aggressive" mode that creates a commit on the source branch (?before/after? merge)
@@ -287,6 +285,20 @@ commit() {
     git commit --author="${GIT_AUTHOR}" --message="${1}."
 }
 
+git_merge() {
+
+    local -r sBranch="${1?One parameter required: <branch> [merge-strategy]}"
+    local -r sMergeStrategy="${2:-}"
+
+    if [[ "${sMergeStrategy}" == '' ]];then
+        git merge --no-ff --no-edit "${sBranch}"
+    else
+        git merge --no-ff --no-edit -X "${sMergeStrategy}" "${sBranch}"
+    fi
+
+    git commit --amend --author="${GIT_AUTHOR}" --no-edit
+}
+
 createBranch() {
     local sBranchName sStartBranch
 
@@ -352,8 +364,7 @@ mergeSplitBranch() {
         printStatus "Branch '${sBranchName}' exists"
 
         (
-            git merge --no-ff --no-edit -X theirs "${sBranchName}" \
-                && printStatus 'No merge conflict'
+            git_merge "${sBranchName}" 'theirs' && printStatus 'No merge conflict'
         ) || (
             printStatus 'Merge conflict occurred. Attempting to resolve.'
             git add -- "${g_sSourceFilePath}" \
@@ -560,7 +571,7 @@ run() {
         printTopic "Merging source branch '${g_sSourceBranch}' into the root branch '${g_sRootBranch}'"
         checkoutRootBranch
 
-        git merge --no-ff --no-edit "${g_sSourceBranch}"
+        git_merge "${g_sSourceBranch}"
     else
         printMessage 'Aborting.'
     fi
