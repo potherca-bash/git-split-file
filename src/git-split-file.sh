@@ -102,7 +102,8 @@ declare -i g_iErrorCount=0
 readonly g_sBranchPrefix='split-file'
 readonly g_sColorDim=$(tput dim)
 readonly g_sColorRestore=$(tput sgr0)
-readonly g_sAuthor='Potherca-Bot <potherca+bot@gmail.com>'
+
+: readonly "${GIT_AUTHOR:=Potherca-Bot <potherca+bot@gmail.com>}"
 # ==============================================================================
 
 
@@ -283,7 +284,7 @@ getCurrentBranch() {
 
 commit() {
     printStatus 'Creating commit'
-    git commit --author="${g_sAuthor}" --message="${1}."
+    git commit --author="${GIT_AUTHOR}" --message="${1}."
 }
 
 createBranch() {
