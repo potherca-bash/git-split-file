@@ -100,6 +100,11 @@ For various reasons it is desirable to split such files into smaller files.
 
 Instead of doing this by hand, it made more sense to automate parts of the process.
 
+## Development
+
+There is currently only [one test, in a separate repo](https://github.com/potherca-bash/git-split-file-test). Yes, more tests _do_ need to be added.
+Feel free to contribute some! 😉
+
 <!--
 
 ## Contributing
