@@ -371,7 +371,7 @@ mergeSplitBranch() {
                 && commit "Merging split file '${g_sSourceFileName}'"
         ) || (
             printStatus 'Merge conflict remains. Attempting to resolve more aggressively.'
-            git add $(cat git status | grep -o -E 'added by us: .*' | cut -d ':' -f 2) \
+            git add $(git status | grep -o -E 'added by us: .*' | cut -d ':' -f 2) \
                 && commit "Merging split file '${g_sSourceFileName}'"
         )
     else
